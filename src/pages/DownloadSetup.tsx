@@ -1,4 +1,3 @@
-import { useState, useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import VideoPreviewCard from "../components/VideoPreviewCard";
 import QualityOption from "../components/QualityOption";
@@ -7,47 +6,26 @@ import DownloadActionButton from "../components/DownloadActionButton";
 import type { DownloadFormat, VideoInfo } from "../types/download";
 
 interface DownloadSetupProps {
+  videoInfo: VideoInfo;
+  videoFormats: DownloadFormat[];
+  audioFormats: DownloadFormat[];
+  selectedFormat: DownloadFormat | null;
+  onSelectFormat: (format: DownloadFormat) => void;
   onBack: () => void;
   onDownload: () => void;
 }
 
-const MOCK_VIDEO: VideoInfo = {
-  title: "Neon Nights: Urban Explorations Through City Lights",
-  channel: "Cinematic Vlogs",
-  duration: "12:48",
-  thumbnailUrl: "",
-};
-
-const MOCK_VIDEO_FORMATS: DownloadFormat[] = [
-  { type: "video", quality: "1080p", label: "HD · 85MB", format: "MP4", size: "85 MB" },
-  { type: "video", quality: "720p", label: "SD · 42MB", format: "MP4", size: "42 MB" },
-  { type: "video", quality: "480p", label: "Low · 24MB", format: "MP4", size: "24 MB" },
-  { type: "video", quality: "360p", label: "Data Saver · 14MB", format: "MP4", size: "14 MB" },
-];
-
-const MOCK_AUDIO_FORMATS: DownloadFormat[] = [
-  { type: "audio", quality: "MP3 320kbps", label: "High Quality", bitrate: "320 kbps", size: "9.8 MB" },
-];
-
-const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
-  const [selectedFormat, setSelectedFormat] = useState<DownloadFormat | null>(null);
-
-  const handleSelect = useCallback((format: DownloadFormat) => {
-    setSelectedFormat((prev) => {
-      // If clicking the already-selected format, deselect it
-      if (
-        prev &&
-        prev.type === format.type &&
-        prev.quality === format.quality
-      ) {
-        return null;
-      }
-      return format;
-    });
-  }, []);
-
-  const videoFormats = MOCK_VIDEO_FORMATS.filter((f) => f.type === "video");
-  const audioFormats = MOCK_AUDIO_FORMATS.filter((f) => f.type === "audio");
+const DownloadSetup = ({
+  videoInfo,
+  videoFormats,
+  audioFormats,
+  selectedFormat,
+  onSelectFormat,
+  onBack,
+  onDownload,
+}: DownloadSetupProps) => {
+  const videoFormatsOnly = videoFormats.filter((f) => f.type === "video");
+  const audioFormatsOnly = audioFormats.filter((f) => f.type === "audio");
 
   return (
     <div className="w-full h-screen flex flex-col">
@@ -69,7 +47,7 @@ const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-md mx-auto px-4 space-y-6 pb-20">
           {/* Video preview */}
-          <VideoPreviewCard video={MOCK_VIDEO} />
+          <VideoPreviewCard video={videoInfo} />
 
           {/* Video Quality Section */}
           <section>
@@ -77,7 +55,7 @@ const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
               Video Quality
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {videoFormats.map((format) => (
+              {videoFormatsOnly.map((format) => (
                 <QualityOption
                   key={format.quality}
                   format={format}
@@ -85,7 +63,7 @@ const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
                     selectedFormat?.type === "video" &&
                     selectedFormat.quality === format.quality
                   }
-                  onSelect={handleSelect}
+                  onSelect={onSelectFormat}
                 />
               ))}
             </div>
@@ -97,7 +75,7 @@ const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
               Audio Only
             </h2>
             <div className="space-y-3">
-              {audioFormats.map((format) => (
+              {audioFormatsOnly.map((format) => (
                 <AudioOption
                   key={format.quality}
                   format={format}
@@ -105,7 +83,7 @@ const DownloadSetup = ({ onBack, onDownload }: DownloadSetupProps) => {
                     selectedFormat?.type === "audio" &&
                     selectedFormat.quality === format.quality
                   }
-                  onSelect={handleSelect}
+                  onSelect={onSelectFormat}
                 />
               ))}
             </div>

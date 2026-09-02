@@ -1,4 +1,3 @@
-import { useState, useCallback } from "react";
 import Home from "./pages/Home";
 import Analyzing from "./pages/Analyzing";
 import DownloadSetup from "./pages/DownloadSetup";
@@ -7,150 +6,108 @@ import DownloadComplete from "./pages/DownloadComplete";
 import DownloadErrorScreen from "./pages/DownloadError";
 import SettingsPage from "./pages/Settings";
 import BottomNav from "./components/BottomNav";
-import type { NavItem } from "./types/navigation";
-import type { DownloadingInfo, CompletedDownload, DownloadError as DownloadErrorType } from "./types/download";
+import { useDownloadFlow } from "./hooks/useDownloadFlow";
 
-type HomeScreen = "idle" | "analyzing" | "setup" | "downloading" | "complete" | "error";
-
-const MOCK_DOWNLOAD_INFO: DownloadingInfo = {
-  title: "The Future of Urban Music and Culture",
-  thumbnailUrl: "",
-  format: "MP4",
-  quality: "1080p60",
-  progress: 42,
-  downloaded: "84 MB",
-  total: "200 MB",
-  speed: "3.8 MB/s",
-  eta: "00:31",
-};
-
-const MOCK_ERROR: DownloadErrorType = {
-  title: "Couldn't download this video",
-  message: "Something went wrong while processing the YouTube link. Please check your connection or the link itself.",
-};
-
-const MOCK_COMPLETED: CompletedDownload = {
-  title: "Designing for the Future: Minimalist UI in 2024",
-  type: "video",
-  format: "MP4",
-  size: "142.5 MB",
-  duration: "10:45",
-  thumbnailUrl: "",
-};
+const HIDE_BOTTOM_NAV_SCREENS = new Set([
+  "downloading",
+  "complete",
+  "error",
+  "analyzing",
+]);
 
 function App() {
-  const [activeNav, setActiveNav] = useState<NavItem>("home");
-  const [homeScreen, setHomeScreen] = useState<HomeScreen>("idle");
-  const [analyzingUrl, setAnalyzingUrl] = useState("");
+  const {
+    screen,
+    navTab,
+    url,
+    videoInfo,
+    videoFormats,
+    audioFormats,
+    selectedFormat,
+    downloadingInfo,
+    completedDownload,
+    error,
+    stage,
+    handleAnalysisComplete,
+    handleAnalyze,
+    handleSelectFormat,
+    handleStartDownload,
+    handleCancelDownload,
 
-  const handleAnalyze = useCallback((url: string) => {
-    setAnalyzingUrl(url);
-    setHomeScreen("analyzing");
-  }, []);
-
-  const handleAnalysisComplete = useCallback(() => {
-    setHomeScreen("setup");
-  }, []);
-
-  const handleBackToHome = useCallback(() => {
-    setHomeScreen("idle");
-    setAnalyzingUrl("");
-  }, []);
-
-  const handleBackToAnalyzing = useCallback(() => {
-    setHomeScreen("analyzing");
-  }, []);
-
-  const handleStartDownload = useCallback(() => {
-    setHomeScreen("downloading");
-  }, []);
-
-  const handleCancelDownload = useCallback(() => {
-    setHomeScreen("setup");
-  }, []);
-
-  const handleDownloadComplete = useCallback(() => {
-    setHomeScreen("complete");
-  }, []);
-
-  const handleOpenFile = useCallback(() => {
-    console.log("Open file:", MOCK_COMPLETED);
-  }, []);
-
-  const handleDownloadAnother = useCallback(() => {
-    setHomeScreen("idle");
-    setAnalyzingUrl("");
-  }, []);
-
-  const handleTryAgain = useCallback(() => {
-    setHomeScreen("analyzing");
-  }, []);
-
-  const handleChangeLink = useCallback(() => {
-    setHomeScreen("idle");
-    setAnalyzingUrl("");
-  }, []);
+    handleOpenFile,
+    handleDownloadAnother,
+    handleTryAgain,
+    handleChangeLink,
+    handleBackToHome,
+    handleBackToAnalyzing,
+    handleBackToSetup,
+    handleNavChange,
+    handleSettingsBack,
+  } = useDownloadFlow();
 
   const showBottomNav =
-    activeNav !== "home" ||
-    homeScreen === "idle" ||
-    homeScreen === "setup";
+    navTab !== "home" || !HIDE_BOTTOM_NAV_SCREENS.has(screen);
 
   return (
     <div className="w-full min-h-screen bg-bg-primary relative">
-      {/* Main content area */}
-      {activeNav === "home" && homeScreen === "idle" && (
+      {/* === Home download flow screens === */}
+      {screen === "home" && navTab === "home" && (
         <Home onAnalyze={handleAnalyze} />
       )}
-      {activeNav === "home" && homeScreen === "analyzing" && (
+      {screen === "analyzing" && (
         <Analyzing
-          url={analyzingUrl}
+          url={url}
           onBack={handleBackToHome}
           onComplete={handleAnalysisComplete}
         />
       )}
-      {activeNav === "home" && homeScreen === "setup" && (
+      {screen === "setup" && (
         <DownloadSetup
+          videoInfo={videoInfo}
+          videoFormats={videoFormats}
+          audioFormats={audioFormats}
+          selectedFormat={selectedFormat}
+          onSelectFormat={handleSelectFormat}
           onBack={handleBackToAnalyzing}
           onDownload={handleStartDownload}
         />
       )}
-      {activeNav === "home" && homeScreen === "downloading" && (
+      {screen === "downloading" && downloadingInfo && (
         <Downloading
-          info={MOCK_DOWNLOAD_INFO}
-          onBack={() => setHomeScreen("setup")}
+          info={downloadingInfo}
+          onBack={handleBackToSetup}
           onCancel={handleCancelDownload}
-          onComplete={handleDownloadComplete}
+          stage={stage}
         />
       )}
-      {activeNav === "home" && homeScreen === "complete" && (
+      {screen === "complete" && completedDownload && (
         <DownloadComplete
-          file={MOCK_COMPLETED}
+          file={completedDownload}
           onOpenFile={handleOpenFile}
           onDownloadAnother={handleDownloadAnother}
         />
       )}
-      {activeNav === "home" && homeScreen === "error" && (
+      {screen === "error" && error && (
         <DownloadErrorScreen
-          error={MOCK_ERROR}
+          error={error}
           onTryAgain={handleTryAgain}
           onChangeLink={handleChangeLink}
         />
       )}
 
-      {/* Placeholder screens for other tabs */}
-      {activeNav === "history" && (
-        <div className="min-h-screen flex items-center justify-center">
-          <p className="text-text-secondary text-[15px]">History</p>
+      {/* === Tab-based screens === */}
+      {navTab === "history" && screen !== "settings" && (
+        <div className="min-h-screen flex items-center justify-center pb-24">
+          <p className="text-text-secondary text-[15px]">No history yet</p>
         </div>
       )}
-      {activeNav === "settings" && (
-        <SettingsPage onBack={() => setActiveNav("home")} />
+      {navTab === "settings" && (
+        <SettingsPage onBack={handleSettingsBack} />
       )}
 
-      {/* Bottom navigation — hidden on downloading/complete screens */}
+      {/* === Bottom navigation === */}
       {showBottomNav && (
-        <BottomNav active={activeNav} onChange={setActiveNav} />
+        <BottomNav active={navTab} onChange={handleNavChange} />
       )}
     </div>
   );

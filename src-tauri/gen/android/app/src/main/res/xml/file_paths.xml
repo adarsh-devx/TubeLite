@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- App-specific external files (getExternalFilesDir / Files dir) -->
+  <external-files-path name="app_downloads" path="." />
+  <!-- Shared external storage root (covers /storage/emulated/0/Download/...) -->
+  <external-path name="shared_downloads" path="Download" />
+  <!-- App cache -->
+  <cache-path name="app_cache" path="." />
+</paths>

@@ -1,12 +1,12 @@
 import { Home, Clock, Settings } from "lucide-react";
-import type { NavItem } from "../types/navigation";
+import type { NavTab } from "../hooks/useDownloadFlow";
 
 interface BottomNavProps {
-  active: NavItem;
-  onChange: (item: NavItem) => void;
+  active: NavTab;
+  onChange: (item: NavTab) => void;
 }
 
-const navItems: { id: NavItem; label: string; Icon: typeof Home }[] = [
+const navItems: { id: NavTab; label: string; Icon: typeof Home }[] = [
   { id: "home", label: "Home", Icon: Home },
   { id: "history", label: "History", Icon: Clock },
   { id: "settings", label: "Settings", Icon: Settings },

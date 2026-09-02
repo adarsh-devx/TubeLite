@@ -25,3 +25,42 @@ dist-ssr
 
 # Local metadata / hidden tracking files
 .freebuff/
+
+# Bundled binaries (large files — place manually before build)
+src-tauri/bin/*.exe
+src-tauri/bin/*.dll
+src-tauri/bin/*.dylib
+src-tauri/bin/*.so
+
+# Android generated files
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/build/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/app/src/main/jniLibs/
+src-tauri/gen/android/app/src/main/assets/
+
+# Android signing secrets
+*.jks
+*.keystore
+signing.properties
+src-tauri/gen/android/app/signing.properties
+
+# Rust Android build artifacts
+src-tauri/target/aarch64-linux-android/
+src-tauri/target/armv7-linux-androideabi/
+src-tauri/target/i686-linux-android/
+src-tauri/target/x86_64-linux-android/
+
+# APK outputs
+*.apk
+*.aab
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Rust / Tauri build artifacts
+src-tauri/target/
+

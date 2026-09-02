@@ -7,10 +7,15 @@ interface DownloadingProps {
   info: DownloadingInfo;
   onBack: () => void;
   onCancel: () => void;
-  onComplete: () => void;
+  stage?: "downloading" | "converting";
 }
 
-const Downloading = ({ info, onBack, onCancel: _onCancel, onComplete }: DownloadingProps) => {
+const Downloading = ({
+  info,
+  onBack,
+  onCancel,
+  stage,
+}: DownloadingProps) => {
   return (
     <div className="w-full min-h-screen flex flex-col">
       {/* Top bar */}
@@ -21,9 +26,8 @@ const Downloading = ({ info, onBack, onCancel: _onCancel, onComplete }: Download
           aria-label="Go back"
         >
           <ArrowLeft className="w-6 h-6 text-text-primary" strokeWidth={2} />
-        </button>
-        <h1 className="text-[20px] font-bold text-text-primary absolute left-0 right-0 text-center pointer-events-none">
-          Downloading
+        </button>            <h1 className="text-[20px] font-bold text-text-primary absolute left-0 right-0 text-center pointer-events-none">
+          {stage === "converting" ? "Converting" : "Downloading"}
         </h1>
       </header>
 
@@ -69,9 +73,9 @@ const Downloading = ({ info, onBack, onCancel: _onCancel, onComplete }: Download
         </div>
       </div>
 
-      {/* Cancel button — at bottom above safe area */}
+      {/* Bottom actions */}
       <div className="w-full max-w-md mx-auto px-4 pb-6">
-        <CancelDownloadButton onPress={onComplete} />
+        <CancelDownloadButton onPress={onCancel} />
       </div>
     </div>
   );
