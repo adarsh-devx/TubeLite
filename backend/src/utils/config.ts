@@ -1,5 +1,5 @@
 export const config = {
-  host: process.env.BACKEND_HOST || '127.0.0.1',
+  host: process.env.BACKEND_HOST || '0.0.0.0',
   port: Number(process.env.PORT || 3001),
   ytdlpBinary: process.env.YT_DLP_BINARY || 'yt-dlp',
   ffmpegBinary: process.env.FFMPEG_BINARY || 'ffmpeg',
