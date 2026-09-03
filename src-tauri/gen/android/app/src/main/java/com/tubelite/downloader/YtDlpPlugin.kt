@@ -67,10 +67,12 @@ class YtDlpPlugin(private val activity: Activity) : Plugin(activity) {
                 Log.d(TAG, "[ANDROID YTDLP] Extracting info for: ${args.url}")
 
                 val request = YtDlpRequest(args.url)
-                    .addOption("--dump-json")
-                    .addOption("--no-playlist")
-                    .addOption("--extractor-retries")
-                    .addOption("3")
+    .addOption("--dump-json")
+    .addOption("--no-playlist")
+    .addOption("--no-check-certificates")
+    .addOption("--extractor-retries")
+    .addOption("5")
+    .addOption("--verbose")
 
                 Log.d(TAG, "[ANDROID YTDLP] Calling YtDlp.execute...")
                 val response: YtDlpResponse

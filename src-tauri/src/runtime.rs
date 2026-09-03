@@ -55,8 +55,12 @@ fn resolve_binary(name: &str) -> Option<PathBuf> {
         exe.join(format!("{name}-{target_triple}.exe")),
         exe.join(format!("{name}.exe")),
         // 2. Development: project root / src-tauri / bin /
-        root.join("src-tauri").join("bin").join(format!("{name}-{target_triple}.exe")),
-        root.join("src-tauri").join("bin").join(format!("{name}.exe")),
+        root.join("src-tauri")
+            .join("bin")
+            .join(format!("{name}-{target_triple}.exe")),
+        root.join("src-tauri")
+            .join("bin")
+            .join(format!("{name}.exe")),
     ];
 
     eprintln!("[RUNTIME] Resolving {name}:");

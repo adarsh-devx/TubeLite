@@ -142,13 +142,7 @@ fn format_filesize(bytes: i64) -> String {
 fn quality_label(height: Option<i64>, fps: Option<f64>) -> String {
     match height {
         Some(h) => {
-            let fps_suffix = fps.map_or("".into(), |f| {
-                if f > 50.0 {
-                    "60"
-                } else {
-                    ""
-                }
-            });
+            let fps_suffix = fps.map_or("".into(), |f| if f > 50.0 { "60" } else { "" });
             format!("{h}p{fps_suffix}")
         }
         None => "Unknown".into(),
@@ -206,11 +200,10 @@ async fn run_ytdlp(url: &str) -> Result<YtdlpInfo, AnalyzeError> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str::<YtdlpInfo>(&stdout)
-        .map_err(|e| AnalyzeError::extraction_failed(&format!("Failed to parse yt-dlp output: {e}")))
+    serde_json::from_str::<YtdlpInfo>(&stdout).map_err(|e| {
+        AnalyzeError::extraction_failed(&format!("Failed to parse yt-dlp output: {e}"))
+    })
 }
-
-
 
 fn normalize_formats(info: &YtdlpInfo) -> (Vec<NormalizedVideoFormat>, Vec<NormalizedAudioFormat>) {
     let formats = match &info.formats {
@@ -222,7 +215,8 @@ fn normalize_formats(info: &YtdlpInfo) -> (Vec<NormalizedVideoFormat>, Vec<Norma
     let mut audio_formats: Vec<NormalizedAudioFormat> = Vec::new();
 
     // Track seen video qualities to deduplicate
-    let mut seen_video_qualities: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_video_qualities: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     for fmt in formats {
         let has_video = fmt.vcodec.as_deref() != Some("none") && fmt.vcodec.is_some();
@@ -338,9 +332,7 @@ pub async fn analyze_url(url: String) -> Result<AnalyzedVideo, AnalyzeError> {
     let (video_formats, audio_formats) = normalize_formats(&info);
 
     // Then extract fields (consumes info)
-    let title = info
-        .title
-        .unwrap_or_else(|| "Unknown Title".into());
+    let title = info.title.unwrap_or_else(|| "Unknown Title".into());
 
     let channel = info
         .channel
@@ -352,9 +344,7 @@ pub async fn analyze_url(url: String) -> Result<AnalyzedVideo, AnalyzeError> {
         .map(format_duration)
         .unwrap_or_else(|| "0:00".into());
 
-    let thumbnail = info
-        .thumbnail
-        .unwrap_or_default();
+    let thumbnail = info.thumbnail.unwrap_or_default();
 
     Ok(AnalyzedVideo {
         title,

@@ -28,6 +28,12 @@ import {
   buildCompletedDownload,
 } from "../data/mockData";
 
+import {
+  initializeHistory,
+  addToHistory,
+  type HistoryItem,
+} from "../services/history";
+
 export type Screen =
   | "home"
   | "analyzing"
@@ -61,6 +67,7 @@ interface DownloadFlowState {
     total: string;
   } | null;
   completedDownloadInfo?: CompletedDownload;
+  history: HistoryItem[];
 }
 
 export function useDownloadFlow() {
@@ -77,10 +84,43 @@ export function useDownloadFlow() {
     speed: "—",
     eta: "—",
     error: null,
+    history: [],
   });
 
   const analyzeAbortRef = useRef<AbortController | null>(null);
   const eventUnlistenersRef = useRef<(() => void)[]>([]);
+  const historyInitializedRef = useRef(false);
+
+  // Load persisted download history once.
+  useEffect(() => {
+    let cancelled = false;
+
+    void initializeHistory()
+      .then((items) => {
+        if (cancelled) return;
+        historyInitializedRef.current = true;
+        setState((s) => ({ ...s, history: items }));
+      })
+      .catch((error) => {
+        console.error("[History] failed to initialize history:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveToHistory = useCallback(async (file: CompletedDownload) => {
+    try {
+      const item = await addToHistory(file);
+      setState((s) => ({
+        ...s,
+        history: [item, ...s.history.filter((entry) => entry.id !== item.id)],
+      }));
+    } catch (error) {
+      console.error("[History] failed to save download:", error);
+    }
+  }, []);
 
   // Clean up on unmount
   useEffect(() => {
@@ -115,20 +155,23 @@ export function useDownloadFlow() {
     const unlistenComplete = onDownloadComplete(
       (payload: DownloadCompleteInfo) => {
         cleanupEventListeners();
+        const completed: CompletedDownload = {
+          title: payload.title,
+          type: payload.format.toLowerCase() === "mp3" ? "audio" : "video",
+          format: payload.format,
+          size: payload.size,
+          duration: payload.duration,
+          thumbnailUrl: payload.thumbnail,
+          filepath: payload.filepath,
+        };
+
+        void saveToHistory(completed);
+
         setState((s) => ({
           ...s,
           screen: "complete",
           progress: 100,
-          completedDownloadInfo: {
-            title: payload.title,
-            type: payload.format.toLowerCase() === "mp3" ? "audio" : "video",
-            filename: payload.filename,
-            filepath: payload.filepath,
-            format: payload.format,
-            size: payload.size,
-            duration: payload.duration,
-            thumbnail: payload.thumbnail,
-          },
+          completedDownloadInfo: completed,
         }));
       },
     );
@@ -150,7 +193,7 @@ export function useDownloadFlow() {
         eventUnlistenersRef.current = fns;
       },
     );
-  }, [cleanupEventListeners]);
+  }, [cleanupEventListeners, saveToHistory]);
 
   // ── Analyze ───────────────────────────────────────────────────────
 
@@ -296,7 +339,21 @@ export function useDownloadFlow() {
       const timer = setInterval(() => {
         if (idx >= MOCK_STEPS.length) {
           clearInterval(timer);
-          setState((s) => ({ ...s, screen: "complete" }));
+
+          const completed = selectedFormat
+            ? buildCompletedDownload(videoInfo!, selectedFormat)
+            : null;
+
+          if (completed) {
+            void saveToHistory(completed);
+          }
+
+          setState((s) => ({
+            ...s,
+            screen: "complete",
+            progress: 100,
+            completedDownloadInfo: completed ?? undefined,
+          }));
           return;
         }
         const step = MOCK_STEPS[idx];
@@ -334,20 +391,25 @@ export function useDownloadFlow() {
           if (status.status === "completed" && status.result) {
             console.log("[AndroidDownload] status branch: completed", status);
             const localPath = await downloadBackendFile(jobId, status.result.filename);
+            const completed: CompletedDownload = {
+              title: status.result.title,
+              type: kind === "mp3" ? "audio" : "video",
+              format: status.result.format,
+              size: status.result.size,
+              duration: status.result.duration,
+              thumbnailUrl: status.result.thumbnail,
+              filepath: localPath,
+            };
+
+            // Persist only after the file has actually been copied to the device.
+            await saveToHistory(completed);
+
             cleanupEventListeners();
             setState((s) => ({
               ...s,
               screen: "complete",
               progress: 100,
-              completedDownloadInfo: {
-                title: status.result!.title,
-                type: kind === "mp3" ? "audio" : "video",
-                format: status.result!.format,
-                size: status.result!.size,
-                duration: status.result!.duration,
-                thumbnailUrl: status.result!.thumbnail,
-                filepath: localPath,
-              },
+              completedDownloadInfo: completed,
             }));
             break;
           }
@@ -383,7 +445,7 @@ export function useDownloadFlow() {
       console.error("[AndroidDownload] surfaced error to UI:", error);
       setState((s) => ({ ...s, screen: "error", error }));
     }
-  }, [state, setupDownloadEventListeners, cleanupEventListeners]);
+  }, [state, setupDownloadEventListeners, cleanupEventListeners, saveToHistory]);
 
   const handleCancelDownload = useCallback(async () => {
     cleanupEventListeners();
@@ -573,6 +635,7 @@ export function useDownloadFlow() {
     selectedFormat: state.selectedFormat,
     downloadingInfo,
     completedDownload,
+    history: state.history,
     error: state.error,
     stage: state.stage,
 

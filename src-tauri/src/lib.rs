@@ -1,8 +1,11 @@
 mod commands;
 pub mod runtime;
 
-use commands::{analyze_url, cancel_download, download_backend_file, open_local_file, ping, start_download};
+use commands::{
+    analyze_url, cancel_download, download_backend_file, open_local_file, ping, start_download,
+};
 use serde::Serialize;
+use tauri::Manager;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,11 +41,18 @@ async fn android_extract_info(
         let result = state.extract_info(&_url);
         match &result {
             Ok(video) => {
-                eprintln!("[ANDROID BRIDGE] success: title='{}', {} video formats, {} audio formats",
-                    video.title, video.video_formats.len(), video.audio_formats.len());
+                eprintln!(
+                    "[ANDROID BRIDGE] success: title='{}', {} video formats, {} audio formats",
+                    video.title,
+                    video.video_formats.len(),
+                    video.audio_formats.len()
+                );
             }
             Err(e) => {
-                eprintln!("[ANDROID BRIDGE] plugin error: code={}, message={}", e.code, e.message);
+                eprintln!(
+                    "[ANDROID BRIDGE] plugin error: code={}, message={}",
+                    e.code, e.message
+                );
             }
         }
         result
@@ -59,6 +69,7 @@ async fn android_extract_info(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_ytdlp::init())

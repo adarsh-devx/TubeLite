@@ -246,7 +246,7 @@ export interface BackendDownloadStatus {
 export async function getDownloadStatus(jobId: string): Promise<BackendDownloadStatus> {
   const requestUrl = `${backendUrl}/api/download/${encodeURIComponent(jobId)}`;
   console.log("[AndroidDownload] polling URL:", requestUrl);
-  const response = await fetch(requestUrl);
+  const response = await nativeFetch(requestUrl);
   const responseText = await response.text();
   console.log("[AndroidDownload] polling response:", requestUrl, response.status, responseText);
   if (!response.ok) {

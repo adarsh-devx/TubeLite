@@ -160,8 +160,6 @@ fn is_valid_youtube_url(url: &str) -> bool {
 
 // ── yt-dlp path resolution ───────────────────────────────────────────
 
-
-
 fn mp3_format_selector() -> &'static str {
     "bestaudio/best"
 }
@@ -202,8 +200,9 @@ fn get_download_dir() -> Result<PathBuf, DownloadError> {
     match base {
         Some(dir) => {
             let tubelite_dir = dir.join("TubeLite");
-            fs::create_dir_all(&tubelite_dir)
-                .map_err(|e| DownloadError::output_error(&format!("Could not create download directory: {e}")))?;
+            fs::create_dir_all(&tubelite_dir).map_err(|e| {
+                DownloadError::output_error(&format!("Could not create download directory: {e}"))
+            })?;
             Ok(tubelite_dir)
         }
         None => Err(DownloadError::output_error(
@@ -217,7 +216,18 @@ fn get_download_dir() -> Result<PathBuf, DownloadError> {
 fn sanitize_filename(title: &str) -> String {
     let cleaned: String = title
         .chars()
-        .filter(|c| *c != '\0' && *c != '/' && *c != '\\' && *c != ':' && *c != '*' && *c != '?' && *c != '"' && *c != '<' && *c != '>' && *c != '|')
+        .filter(|c| {
+            *c != '\0'
+                && *c != '/'
+                && *c != '\\'
+                && *c != ':'
+                && *c != '*'
+                && *c != '?'
+                && *c != '"'
+                && *c != '<'
+                && *c != '>'
+                && *c != '|'
+        })
         .collect();
     let cleaned = cleaned.trim().replace(['\t', '\r', '\n'], " ");
     let mut result = String::with_capacity(cleaned.len());
@@ -370,11 +380,17 @@ fn extract_eta(line: &str) -> String {
 fn parse_size_bytes(s: &str) -> Result<u64, ()> {
     let s = s.trim().replace(' ', "");
     if let Some(v) = s.strip_suffix("GB") {
-        v.parse::<f64>().map(|v| (v * 1024.0 * 1024.0 * 1024.0) as u64).map_err(|_| ())
+        v.parse::<f64>()
+            .map(|v| (v * 1024.0 * 1024.0 * 1024.0) as u64)
+            .map_err(|_| ())
     } else if let Some(v) = s.strip_suffix("MB") {
-        v.parse::<f64>().map(|v| (v * 1024.0 * 1024.0) as u64).map_err(|_| ())
+        v.parse::<f64>()
+            .map(|v| (v * 1024.0 * 1024.0) as u64)
+            .map_err(|_| ())
     } else if let Some(v) = s.strip_suffix("KB") {
-        v.parse::<f64>().map(|v| (v * 1024.0) as u64).map_err(|_| ())
+        v.parse::<f64>()
+            .map(|v| (v * 1024.0) as u64)
+            .map_err(|_| ())
     } else if let Some(v) = s.strip_suffix('B') {
         v.parse::<u64>().map_err(|_| ())
     } else {
@@ -416,7 +432,10 @@ pub async fn start_download(
     let (format_selector, extra_args) = if is_mp3 {
         (mp3_format_selector().to_string(), vec![])
     } else {
-        (quality_to_format_selector(&request.quality)?, vec!["--merge-output-format", "mp4"])
+        (
+            quality_to_format_selector(&request.quality)?,
+            vec!["--merge-output-format", "mp4"],
+        )
     };
 
     // For MP3: yt-dlp outputs to a temp file, then FFmpeg converts
@@ -435,14 +454,17 @@ pub async fn start_download(
 
     let mut ytdlp_args = vec![
         url,
-        "-f", &format_selector,
-        "-o", &output_template,
+        "-f",
+        &format_selector,
+        "-o",
+        &output_template,
         "--no-playlist",
         "--no-warnings",
         "--no-check-certificates",
         "--newline",
         "--progress",
-        "--progress-delta", "1",
+        "--progress-delta",
+        "1",
         "--no-colors",
     ];
     ytdlp_args.extend(extra_args);
@@ -460,9 +482,10 @@ pub async fn start_download(
             }
         })?;
 
-    let stdout = child.stdout.take().ok_or_else(|| {
-        DownloadError::download_failed("Could not capture yt-dlp output.")
-    })?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| DownloadError::download_failed("Could not capture yt-dlp output."))?;
 
     {
         let mut active = ACTIVE_DOWNLOAD.lock().await;
@@ -496,14 +519,17 @@ pub async fn start_download(
             }
 
             if line.contains("[Merger]") || line.contains("[VideoConvertor]") {
-                let _ = app_handle.emit("download-progress", ProgressPayload {
-                    progress: 99,
-                    downloaded: "Processing...".into(),
-                    total: String::new(),
-                    speed: "—".into(),
-                    eta: "—".into(),
-                    stage: Some("downloading".into()),
-                });
+                let _ = app_handle.emit(
+                    "download-progress",
+                    ProgressPayload {
+                        progress: 99,
+                        downloaded: "Processing...".into(),
+                        total: String::new(),
+                        speed: "—".into(),
+                        eta: "—".into(),
+                        stage: Some("downloading".into()),
+                    },
+                );
             }
         }
 
@@ -526,7 +552,9 @@ pub async fn start_download(
                 "download-error",
                 DownloadErrorPayload {
                     code: "DOWNLOAD_FAILED".into(),
-                    message: "Download failed. The video may be unavailable or the format may not exist.".into(),
+                    message:
+                        "Download failed. The video may be unavailable or the format may not exist."
+                            .into(),
                 },
             );
             return;
@@ -558,20 +586,29 @@ pub async fn start_download(
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Unknown".into());
             // Strip the .tmp_ prefix if present
-            let final_title = final_title.strip_prefix(".tmp_ ").unwrap_or(&final_title).to_string();
-            let final_title = final_title.strip_prefix(".tmp_").unwrap_or(&final_title).to_string();
+            let final_title = final_title
+                .strip_prefix(".tmp_ ")
+                .unwrap_or(&final_title)
+                .to_string();
+            let final_title = final_title
+                .strip_prefix(".tmp_")
+                .unwrap_or(&final_title)
+                .to_string();
 
             let final_mp3 = unique_filepath(&download_dir_clone, &final_title, "mp3");
 
             // Emit converting stage
-            let _ = app_handle.emit("download-progress", ProgressPayload {
-                progress: 0,
-                downloaded: "Converting...".into(),
-                total: String::new(),
-                speed: "—".into(),
-                eta: "—".into(),
-                stage: Some("converting".into()),
-            });
+            let _ = app_handle.emit(
+                "download-progress",
+                ProgressPayload {
+                    progress: 0,
+                    downloaded: "Converting...".into(),
+                    total: String::new(),
+                    speed: "—".into(),
+                    eta: "—".into(),
+                    stage: Some("converting".into()),
+                },
+            );
 
             let ffmpeg_path = crate::runtime::resolve_ffmpeg();
             let ffmpeg_path = match ffmpeg_path {
@@ -594,10 +631,14 @@ pub async fn start_download(
             let ffmpeg = Command::new(&ffmpeg_path)
                 .args([
                     "-y",
-                    "-i", &ytdlp_output.to_string_lossy(),
-                    "-codec:a", "libmp3lame",
-                    "-b:a", "320k",
-                    "-q:a", "0",
+                    "-i",
+                    &ytdlp_output.to_string_lossy(),
+                    "-codec:a",
+                    "libmp3lame",
+                    "-b:a",
+                    "320k",
+                    "-q:a",
+                    "0",
                     &final_mp3.to_string_lossy(),
                 ])
                 .stdout(Stdio::piped())
@@ -641,22 +682,29 @@ pub async fn start_download(
                     // FFmpeg outputs: frame= 1234 fps= 45 ... time=00:01:23.45 ...
                     if let Some(time_pos) = line.find("time=") {
                         let after = &line[time_pos + 5..];
-                        let time_str: String = after.chars().take_while(|c| *c != ' ' && *c != '\t').collect();
+                        let time_str: String = after
+                            .chars()
+                            .take_while(|c| *c != ' ' && *c != '\t')
+                            .collect();
                         // Parse HH:MM:SS.ss
                         if let Some((_, rest)) = time_str.split_once(':') {
                             if let Some((mins, rest)) = rest.split_once(':') {
                                 if let Ok(secs) = rest.parse::<f64>() {
-                                    let total_secs = mins.parse::<f64>().unwrap_or(0.0) * 60.0 + secs;
+                                    let total_secs =
+                                        mins.parse::<f64>().unwrap_or(0.0) * 60.0 + secs;
                                     // Assume ~4 min average for a song — rough progress
                                     let progress = ((total_secs / 240.0) * 100.0).min(99.0) as u32;
-                                    let _ = app_handle.emit("download-progress", ProgressPayload {
-                                        progress,
-                                        downloaded: "Converting...".into(),
-                                        total: String::new(),
-                                        speed: "—".into(),
-                                        eta: "—".into(),
-                                        stage: Some("converting".into()),
-                                    });
+                                    let _ = app_handle.emit(
+                                        "download-progress",
+                                        ProgressPayload {
+                                            progress,
+                                            downloaded: "Converting...".into(),
+                                            total: String::new(),
+                                            speed: "—".into(),
+                                            eta: "—".into(),
+                                            stage: Some("converting".into()),
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -683,7 +731,9 @@ pub async fn start_download(
 
             if ffmpeg_success && final_mp3.exists() {
                 let metadata = fs::metadata(&final_mp3).ok();
-                let size = metadata.map(|m| format_filesize(m.len())).unwrap_or_default();
+                let size = metadata
+                    .map(|m| format_filesize(m.len()))
+                    .unwrap_or_default();
                 let filename = final_mp3
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
@@ -710,7 +760,8 @@ pub async fn start_download(
                     "download-error",
                     DownloadErrorPayload {
                         code: "CONVERSION_FAILED".into(),
-                        message: "Audio conversion failed. The source file may be corrupted.".into(),
+                        message: "Audio conversion failed. The source file may be corrupted."
+                            .into(),
                     },
                 );
             }
@@ -719,7 +770,9 @@ pub async fn start_download(
             let _ = ACTIVE_DOWNLOAD.lock().await.take();
 
             let metadata = fs::metadata(&ytdlp_output).ok();
-            let size = metadata.map(|m| format_filesize(m.len())).unwrap_or_default();
+            let size = metadata
+                .map(|m| format_filesize(m.len()))
+                .unwrap_or_default();
             let filename = ytdlp_output
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
