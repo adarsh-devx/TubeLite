@@ -50,8 +50,26 @@ export async function analyzeUrl(
   signal?: AbortSignal,
 ): Promise<AnalyzedResult> {
   if (isAndroidRuntime()) {
-    return analyzeWithBackend(url, signal);
+  console.log("[AndroidAnalyze] using backend analysis:", {
+    url,
+    backend: getBackendUrl(),
+  });
+
+  try {
+    const result = await analyzeWithBackend(url, signal);
+
+    console.log("[AndroidAnalyze] backend analysis success:", {
+      title: result.title,
+      videoFormats: result.video_formats.length,
+      audioFormats: result.audio_formats.length,
+    });
+
+    return result;
+  } catch (error) {
+    console.error("[AndroidAnalyze] backend analysis FAILED:", error);
+    throw error;
   }
+}
 
   // Try Android bridge command first.
   // If the command itself is not available (desktop), fall back to analyze_url.
