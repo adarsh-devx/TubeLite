@@ -124,26 +124,84 @@ async function downloadVideo(
   const downloadDir = path.join(os.tmpdir(), 'tubelite-downloads');
   await fs.mkdir(downloadDir, { recursive: true });
 
+  // Snapshot existing files BEFORE yt-dlp runs so we can identify the new output.
+  const existingBefore = new Set(
+    (await fs.readdir(downloadDir).catch(() => []))
+  );
+
   const targetFormat = buildFormatSelector(quality, kind);
   console.log('[Download] yt-dlp format selector:', targetFormat);
-  const outputTemplate = path.join(downloadDir, '%(title)s.%(ext)s');
+  const outputTemplate = path.join(downloadDir, `${jobId ?? 'download'}_%(title)s.%(ext)s`);
 
- const args = [
-  url,
-  '--no-playlist',
-  '--no-warnings',
-  '--no-check-certificates',
-  '--restrict-filenames',
-  '--newline',
+  // Retry loop for YouTube bot detection (same as analyze).
+  const MAX_ATTEMPTS = 3;
+  let lastError: Error | null = null;
 
-  '--js-runtimes',
-  'node:/usr/local/bin/node',
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    if (attempt > 1) {
+      const delay = attempt * 3000;
+      console.log(`[Download] retry attempt ${attempt}/${MAX_ATTEMPTS} after ${delay}ms delay`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
 
-  '--output',
-  outputTemplate,
-  '-f',
-  targetFormat,
-];
+    try {
+      await runYtDlpDownload(url, outputTemplate, targetFormat, kind, jobId);
+      // Success — find and return the output file.
+      const outputFile = await findNewDownloadedFile(downloadDir, kind, existingBefore, jobId);
+      if (!outputFile) {
+        throw new DownloadServiceError('The download completed but no output file was produced.', 500, 'OUTPUT_ERROR');
+      }
+      const stat = await fs.stat(outputFile);
+      const rawName = path.basename(outputFile);
+      const displayName = jobId && rawName.startsWith(`${jobId}_`)
+        ? rawName.slice(jobId.length + 1)
+        : rawName;
+      const title = displayName.replace(/\.\w+$/, '');
+      return {
+        title,
+        filename: displayName,
+        filepath: outputFile,
+        format: kind === 'mp3' ? 'MP3' : 'MP4',
+        size: formatFilesize(stat.size),
+        duration: '0:00',
+        thumbnail: '',
+      };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const msg = lastError.message.toLowerCase();
+      const isRetryable = msg.includes('sign in') || msg.includes('bot') ||
+        msg.includes('403') || msg.includes('429');
+      console.error(`[Download] attempt ${attempt} failed:`, lastError.message);
+      if (!isRetryable || attempt === MAX_ATTEMPTS) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError ?? new DownloadServiceError('Download failed after retries.', 502, 'YTDLP_EXECUTION_FAILED');
+}
+
+async function runYtDlpDownload(
+  url: string,
+  outputTemplate: string,
+  targetFormat: string,
+  kind: 'video' | 'mp3',
+  jobId?: string,
+): Promise<void> {
+  const args = [
+    url,
+    '--no-playlist',
+    '--no-warnings',
+    '--no-check-certificates',
+    '--restrict-filenames',
+    '--newline',
+    '--js-runtimes',
+    'node:/usr/local/bin/node',
+    '--output',
+    outputTemplate,
+    '-f',
+    targetFormat,
+  ];
 
   if (kind === 'video') {
     args.push('--merge-output-format', 'mp4');
@@ -196,24 +254,6 @@ async function downloadVideo(
       resolve();
     });
   });
-
-  const outputFile = await findLatestDownloadedFile(downloadDir, kind);
-  if (!outputFile) {
-    throw new DownloadServiceError('The download completed but no output file was produced.', 500, 'OUTPUT_ERROR');
-  }
-
-  const stat = await fs.stat(outputFile);
-  const title = path.basename(outputFile, path.extname(outputFile));
-
-  return {
-    title,
-    filename: path.basename(outputFile),
-    filepath: outputFile,
-    format: kind === 'mp3' ? 'MP3' : 'MP4',
-    size: formatFilesize(stat.size),
-    duration: '0:00',
-    thumbnail: '',
-  };
 }
 
 function updateProgress(job: DownloadStatus | undefined, output: string): void {
@@ -251,31 +291,50 @@ function parseQualityHeight(quality: string): number {
   return 720;
 }
 
-async function findLatestDownloadedFile(dir: string, kind: 'video' | 'mp3'): Promise<string | null> {
+async function findNewDownloadedFile(dir: string, kind: 'video' | 'mp3', existingBefore: Set<string>, jobId?: string): Promise<string | null> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const files = entries
     .filter((entry) => entry.isFile())
-    .map((entry) => path.join(dir, entry.name))
-    .filter((file) => {
-      if (kind === 'mp3') return file.toLowerCase().endsWith('.mp3');
-      return file.toLowerCase().endsWith('.mp4') || file.toLowerCase().endsWith('.m4a');
+    .map((entry) => ({ name: entry.name, full: path.join(dir, entry.name) }))
+    .filter(({ name }) => {
+      if (kind === 'mp3') return name.toLowerCase().endsWith('.mp3');
+      return name.toLowerCase().endsWith('.mp4') || name.toLowerCase().endsWith('.m4a');
     });
 
   if (files.length === 0) return null;
 
-  const { mtimeMs } = await fs.stat(files[0]);
-  let latest = files[0];
-  let latestTime = mtimeMs;
-
-  for (const file of files.slice(1)) {
-    const stat = await fs.stat(file);
-    if (stat.mtimeMs > latestTime) {
-      latest = file;
-      latestTime = stat.mtimeMs;
+  // First try: look for files prefixed with the jobId (unambiguous match).
+  const jobFiles = jobId ? files.filter(({ name }) => name.startsWith(`${jobId}_`)) : [];
+  if (jobFiles.length > 0) {
+    // Pick the most recently modified job-prefixed file.
+    let best = jobFiles[0];
+    let bestTime = (await fs.stat(best.full)).mtimeMs;
+    for (const candidate of jobFiles.slice(1)) {
+      const stat = await fs.stat(candidate.full);
+      if (stat.mtimeMs > bestTime) {
+        best = candidate;
+        bestTime = stat.mtimeMs;
+      }
     }
+    return best.full;
   }
 
-  return latest;
+  // Fallback: files that did NOT exist before yt-dlp ran.
+  const newFiles = files.filter(({ name }) => !existingBefore.has(name));
+  if (newFiles.length > 0) {
+    let best = newFiles[0];
+    let bestTime = (await fs.stat(best.full)).mtimeMs;
+    for (const candidate of newFiles.slice(1)) {
+      const stat = await fs.stat(candidate.full);
+      if (stat.mtimeMs > bestTime) {
+        best = candidate;
+        bestTime = stat.mtimeMs;
+      }
+    }
+    return best.full;
+  }
+
+  return null;
 }
 
 function formatFilesize(bytes: number): string {
