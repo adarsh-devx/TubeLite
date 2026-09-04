@@ -24,16 +24,36 @@ async function nativeFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const isAndroid =
-    typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+    typeof navigator !== "undefined" &&
+    /Android/i.test(navigator.userAgent);
 
-  if (
-    isAndroid &&
+  const isTauri =
     typeof window !== "undefined" &&
-    "__TAURI__" in window
-  ) {
-    const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
+    (
+      "__TAURI_INTERNALS__" in window ||
+      "__TAURI__" in window
+    );
+
+  console.log("[AndroidDownload] nativeFetch:", {
+    url,
+    isAndroid,
+    isTauri,
+    userAgent:
+      typeof navigator !== "undefined"
+        ? navigator.userAgent
+        : "<unknown>",
+  });
+
+  if (isAndroid && isTauri) {
+    console.log("[AndroidDownload] Using Tauri native HTTP");
+
+    const { fetch: tauriFetch } =
+      await import("@tauri-apps/plugin-http");
+
     return tauriFetch(url, init);
   }
+
+  console.log("[AndroidDownload] Using browser fetch");
 
   return window.fetch(url, init);
 }
