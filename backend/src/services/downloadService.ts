@@ -128,18 +128,22 @@ async function downloadVideo(
   console.log('[Download] yt-dlp format selector:', targetFormat);
   const outputTemplate = path.join(downloadDir, '%(title)s.%(ext)s');
 
-  const args = [
-    url,
-    '--no-playlist',
-    '--no-warnings',
-    '--no-check-certificates',
-    '--restrict-filenames',
-    '--newline',
-    '--output',
-    outputTemplate,
-    '-f',
-    targetFormat,
-  ];
+ const args = [
+  url,
+  '--no-playlist',
+  '--no-warnings',
+  '--no-check-certificates',
+  '--restrict-filenames',
+  '--newline',
+
+  '--js-runtimes',
+  'node:/usr/local/bin/node',
+
+  '--output',
+  outputTemplate,
+  '-f',
+  targetFormat,
+];
 
   if (kind === 'video') {
     args.push('--merge-output-format', 'mp4');
@@ -230,7 +234,8 @@ function buildFormatSelector(quality: string, kind: 'video' | 'mp3'): string {
   }
 
   const height = parseQualityHeight(quality);
-  return `bestvideo[height<=${height}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
+
+  return `bestvideo[height<=${height}]+bestaudio/best[height<=${height}]/best`;
 }
 
 function parseQualityHeight(quality: string): number {
