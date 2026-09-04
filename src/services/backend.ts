@@ -5,7 +5,11 @@ import type {
 } from "../types/download";
 
 const backendUrl = import.meta.env.VITE_TUBELITE_BACKEND_URL?.trim().replace(/\/$/, "");
-console.log("[AndroidDownload] build-time backend URL:", backendUrl ?? "<unset>");
+
+console.log(
+  "[AndroidDownload] build-time backend URL:",
+  backendUrl ?? "<unset>",
+);
 
 export function getBackendUrl(): string {
   return backendUrl ?? "";
@@ -15,12 +19,22 @@ export function getBackendUrl(): string {
  * Use Tauri HTTP plugin on Android to bypass WebView mixed-content / CORS.
  * Desktop continues to use window.fetch.
  */
-async function nativeFetch(url: string, init?: RequestInit): Promise<Response> {
-  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
-  if (isAndroid && typeof window !== "undefined" && "__TAURI__" in window) {
+async function nativeFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const isAndroid =
+    typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+  if (
+    isAndroid &&
+    typeof window !== "undefined" &&
+    "__TAURI__" in window
+  ) {
     const { fetch: tauriFetch } = await import("@tauri-apps/plugin-http");
     return tauriFetch(url, init);
   }
+
   return window.fetch(url, init);
 }
 
@@ -59,6 +73,7 @@ export async function analyzeWithBackend(
   }
 
   let response: Response;
+
   try {
     response = await nativeFetch(`${backendUrl}/api/analyze`, {
       method: "POST",
@@ -68,6 +83,7 @@ export async function analyzeWithBackend(
     });
   } catch (error) {
     if (signal?.aborted) throw error;
+
     throw new BackendApiError(
       "The analysis service is unavailable. Check your connection and try again.",
       "BACKEND_UNAVAILABLE",
@@ -100,6 +116,7 @@ export async function analyzeWithBackend(
     return parseAnalyzedResult(payload);
   } catch (error) {
     if (error instanceof BackendApiError) throw error;
+
     throw new BackendApiError(
       "The analysis service returned an invalid response.",
       "MALFORMED_RESPONSE",
@@ -117,6 +134,7 @@ export async function downloadWithBackend(
       "The download service is not configured on this device.",
       "BACKEND_UNAVAILABLE",
     );
+
     console.error("[AndroidDownload] missing backend URL", err.message);
     throw err;
   }
@@ -133,10 +151,17 @@ export async function downloadWithBackend(
 
   const controller = new AbortController();
   const timeoutMs = 20000;
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    timeoutMs,
+  );
 
   try {
-    const response = await fetch(requestUrl, {
+    // IMPORTANT:
+    // Android/Tauri uses the native HTTP plugin here.
+    // Desktop continues to use normal fetch through nativeFetch().
+    const response = await nativeFetch(requestUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
@@ -144,26 +169,51 @@ export async function downloadWithBackend(
     });
 
     const responseText = await response.text();
-    console.log("[AndroidDownload] HTTP status:", response.status, response.statusText);
-    console.log("[AndroidDownload] raw response body:", responseText || "<empty>");
-    console.log("[AndroidDownload] POST response body before validation:", responseText || "<empty>");
+
+    console.log(
+      "[AndroidDownload] HTTP status:",
+      response.status,
+      response.statusText,
+    );
+
+    console.log(
+      "[AndroidDownload] raw response body:",
+      responseText || "<empty>",
+    );
+
+    console.log(
+      "[AndroidDownload] POST response body before validation:",
+      responseText || "<empty>",
+    );
 
     if (response.status === 400) {
-      const err = new BackendApiError("Please enter a valid YouTube link.", "INVALID_URL");
+      const err = new BackendApiError(
+        "Please enter a valid YouTube link.",
+        "INVALID_URL",
+      );
+
       console.error("[AndroidDownload] 400 response", err.message);
       throw err;
     }
 
     if (response.status === 504) {
-      const err = new BackendApiError("The download timed out. Please try again.", "DOWNLOAD_TIMEOUT");
+      const err = new BackendApiError(
+        "The download timed out. Please try again.",
+        "DOWNLOAD_TIMEOUT",
+      );
+
       console.error("[AndroidDownload] 504 response", err.message);
       throw err;
     }
 
     if (!response.ok) {
       let backendMessage = `HTTP ${response.status}`;
+
       try {
-        const parsed = JSON.parse(responseText) as { error?: string };
+        const parsed = JSON.parse(responseText) as {
+          error?: string;
+        };
+
         if (parsed?.error) {
           backendMessage = parsed.error;
         }
@@ -177,38 +227,69 @@ export async function downloadWithBackend(
         `The download request failed: ${backendMessage}`,
         "DOWNLOAD_FAILED",
       );
-      console.error("[AndroidDownload] non-OK response", err.message);
+
+      console.error(
+        "[AndroidDownload] non-OK response",
+        err.message,
+      );
+
       throw err;
     }
 
-    const payload: unknown = responseText ? JSON.parse(responseText) : null;
+    const payload: unknown = responseText
+      ? JSON.parse(responseText)
+      : null;
+
     if (!isRecord(payload) || typeof payload.jobId !== "string") {
       const err = new BackendApiError(
         "The download service returned an invalid response.",
         "MALFORMED_RESPONSE",
       );
+
       console.error("[AndroidDownload] malformed response", payload);
       throw err;
     }
 
     console.log("[AndroidDownload] job ID:", payload.jobId);
-    return { jobId: payload.jobId };
+
+    return {
+      jobId: payload.jobId,
+    };
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (
+      error instanceof DOMException &&
+      error.name === "AbortError"
+    ) {
       const err = new BackendApiError(
         "The download request timed out while contacting the backend.",
         "DOWNLOAD_TIMEOUT",
       );
-      console.error("[AndroidDownload] fetch aborted", err.message);
+
+      console.error(
+        "[AndroidDownload] fetch aborted",
+        err.message,
+      );
+
       throw err;
     }
 
+    // IMPORTANT:
+    // Don't wrap our own BackendApiError again.
+    if (error instanceof BackendApiError) {
+      throw error;
+    }
+
     if (error instanceof Error) {
-      console.error("[AndroidDownload] fetch/network exception:", error.message);
+      console.error(
+        "[AndroidDownload] fetch/network exception:",
+        error.message,
+      );
+
       const err = new BackendApiError(
         `The download request failed: ${error.message}`,
         "DOWNLOAD_FAILED",
       );
+
       throw err;
     }
 
@@ -216,7 +297,12 @@ export async function downloadWithBackend(
       "The download request failed while contacting the backend.",
       "DOWNLOAD_FAILED",
     );
-    console.error("[AndroidDownload] unexpected exception", err.message);
+
+    console.error(
+      "[AndroidDownload] unexpected exception",
+      err.message,
+    );
+
     throw err;
   } finally {
     clearTimeout(timeoutId);
@@ -225,12 +311,19 @@ export async function downloadWithBackend(
 
 export interface BackendDownloadStatus {
   jobId: string;
-  status: "queued" | "downloading" | "completed" | "failed";
+
+  status:
+    | "queued"
+    | "downloading"
+    | "completed"
+    | "failed";
+
   progress: number;
   downloaded: string;
   total: string;
   speed: string;
   eta: string;
+
   result?: {
     title: string;
     filename: string;
@@ -240,23 +333,49 @@ export interface BackendDownloadStatus {
     duration: string;
     thumbnail: string;
   };
+
   error?: string;
 }
 
-export async function getDownloadStatus(jobId: string): Promise<BackendDownloadStatus> {
-  const requestUrl = `${backendUrl}/api/download/${encodeURIComponent(jobId)}`;
-  console.log("[AndroidDownload] polling URL:", requestUrl);
+export async function getDownloadStatus(
+  jobId: string,
+): Promise<BackendDownloadStatus> {
+  const requestUrl =
+    `${backendUrl}/api/download/${encodeURIComponent(jobId)}`;
+
+  console.log(
+    "[AndroidDownload] polling URL:",
+    requestUrl,
+  );
+
   const response = await nativeFetch(requestUrl);
   const responseText = await response.text();
-  console.log("[AndroidDownload] polling response:", requestUrl, response.status, responseText);
+
+  console.log(
+    "[AndroidDownload] polling response:",
+    requestUrl,
+    response.status,
+    responseText,
+  );
+
   if (!response.ok) {
-    throw new BackendApiError(`Download status failed: HTTP ${response.status}`, "DOWNLOAD_FAILED");
+    throw new BackendApiError(
+      `Download status failed: HTTP ${response.status}`,
+      "DOWNLOAD_FAILED",
+    );
   }
-  return JSON.parse(responseText) as BackendDownloadStatus;
+
+  return JSON.parse(
+    responseText,
+  ) as BackendDownloadStatus;
 }
 
-function parseAnalyzedResult(payload: unknown): AnalyzedResult {
-  if (!isRecord(payload)) throw malformedResponse();
+function parseAnalyzedResult(
+  payload: unknown,
+): AnalyzedResult {
+  if (!isRecord(payload)) {
+    throw malformedResponse();
+  }
 
   if (
     typeof payload.title !== "string" ||
@@ -274,15 +393,30 @@ function parseAnalyzedResult(payload: unknown): AnalyzedResult {
     channel: payload.channel,
     duration: payload.duration,
     thumbnail: payload.thumbnail,
-    video_formats: payload.video_formats.map(parseVideoFormat),
-    audio_formats: payload.audio_formats.map(parseAudioFormat),
+    video_formats: payload.video_formats.map(
+      parseVideoFormat,
+    ),
+    audio_formats: payload.audio_formats.map(
+      parseAudioFormat,
+    ),
   };
 }
 
-function parseVideoFormat(value: unknown): AnalyzedVideoFormat {
-  if (!isRecord(value) || !hasStringFields(value, ["quality", "label", "format", "size"])) {
+function parseVideoFormat(
+  value: unknown,
+): AnalyzedVideoFormat {
+  if (
+    !isRecord(value) ||
+    !hasStringFields(value, [
+      "quality",
+      "label",
+      "format",
+      "size",
+    ])
+  ) {
     throw malformedResponse();
   }
+
   return {
     quality: value.quality,
     label: value.label,
@@ -291,10 +425,21 @@ function parseVideoFormat(value: unknown): AnalyzedVideoFormat {
   };
 }
 
-function parseAudioFormat(value: unknown): AnalyzedAudioFormat {
-  if (!isRecord(value) || !hasStringFields(value, ["quality", "label", "bitrate", "size"])) {
+function parseAudioFormat(
+  value: unknown,
+): AnalyzedAudioFormat {
+  if (
+    !isRecord(value) ||
+    !hasStringFields(value, [
+      "quality",
+      "label",
+      "bitrate",
+      "size",
+    ])
+  ) {
     throw malformedResponse();
   }
+
   return {
     quality: value.quality,
     label: value.label,
@@ -303,15 +448,23 @@ function parseAudioFormat(value: unknown): AnalyzedAudioFormat {
   };
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function isRecord(
+  value: unknown,
+): value is Record<string, any> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
 }
 
 function hasStringFields(
   value: Record<string, any>,
   fields: string[],
 ): boolean {
-  return fields.every((field) => typeof value[field] === "string");
+  return fields.every(
+    (field) => typeof value[field] === "string",
+  );
 }
 
 function malformedResponse(): BackendApiError {
