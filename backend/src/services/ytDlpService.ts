@@ -40,7 +40,7 @@ export async function analyzeUrl(url: string): Promise<AnalyzedVideoResponse> {
   let lastError: unknown;
   let result: Record<string, any> | null = null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       result = await runYtDlpJson(url);
       break;
@@ -51,8 +51,8 @@ export async function analyzeUrl(url: string): Promise<AnalyzedVideoResponse> {
         || msg.includes('bot')
         || msg.includes('HTTP Error 403')
         || msg.includes('HTTP Error 429');
-      if (isRetryable && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+      if (isRetryable && attempt < 4) {
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
         continue;
       }
       throw err;
@@ -73,14 +73,18 @@ export async function analyzeUrl(url: string): Promise<AnalyzedVideoResponse> {
     const abr = Number(format.abr || 0);
     const fileSize = Number(format.filesize || format.filesize_approx || 0);
 
-    if (hasVideo && height > 0 && ext.toLowerCase() === 'mp4') {
+    // Include both merged (video+audio) AND video-only formats.
+    // YouTube separates streams above 360p — video-only + separate audio.
+    // The download command uses bestvideo+bestaudio which merges them.
+    if (hasVideo && height > 0) {
       const quality = `${height}p`;
       if (!seenVideoQualities.has(quality)) {
         seenVideoQualities.add(quality);
+        const suffix = hasAudio ? '' : ' +audio';
         videoFormats.push({
           quality,
-          label: `${qualityLabel(height)} · ${formatFilesize(fileSize)}`,
-          format: 'MP4',
+          label: `${qualityLabel(height)}${suffix} · ${formatFilesize(fileSize)}`,
+          format: ext.toUpperCase(),
           size: formatFilesize(fileSize),
         });
       }
@@ -118,7 +122,7 @@ function runYtDlpJson(url: string): Promise<Record<string, any>> {
       '--remote-components',
       'ejs:github',
       '--extractor-retries',
-      '3',
+      '5',
       '--no-warnings',
     ];
 

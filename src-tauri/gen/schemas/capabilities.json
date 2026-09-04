@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Default capabilities for TubeLite Downloader","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"http:default","allow":[{"url":"http://10.250.42.215:3001"}]},"sql:default"]}}
+{"default":{"identifier":"default","description":"Default capabilities for TubeLite Downloader","local":true,"windows":["main"],"permissions":["core:default",{"identifier":"http:default","allow":[{"url":"http://10.250.42.215:3001"},{"url":"https://tubelite.onrender.com"}]},"sql:default"]}}

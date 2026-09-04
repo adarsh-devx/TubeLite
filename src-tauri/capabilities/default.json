@@ -12,6 +12,9 @@
       "allow": [
         {
           "url": "http://10.250.42.215:3001"
+        },
+        {
+          "url": "https://tubelite.onrender.com"
         }
       ]
     },

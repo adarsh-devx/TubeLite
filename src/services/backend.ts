@@ -125,8 +125,17 @@ export async function analyzeWithBackend(
   }
 
   if (!response.ok) {
+    let backendMessage = `HTTP ${response.status}`;
+    try {
+      const errorPayload = await response.json();
+      if (errorPayload?.error) {
+        backendMessage = errorPayload.error;
+      }
+    } catch {
+      // ignore parse error
+    }
     throw new BackendApiError(
-      "The video could not be analyzed. Please try again.",
+      `The video could not be analyzed: ${backendMessage}`,
       "ANALYSIS_FAILED",
     );
   }

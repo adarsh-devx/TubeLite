@@ -204,20 +204,6 @@ export function useDownloadFlow() {
     const controller = new AbortController();
     analyzeAbortRef.current = controller;
 
-    // Browser-only fallback: mock data
-    if (!isTauriRuntime()) {
-      await new Promise((r) => setTimeout(r, 2000));
-      if (controller.signal.aborted) return;
-      setState((s) => ({
-        ...s,
-        videoInfo: MOCK_VIDEO_INFO,
-        videoFormats: MOCK_VIDEO_FORMATS,
-        audioFormats: MOCK_AUDIO_FORMATS,
-        screen: "setup",
-      }));
-      return;
-    }
-
     try {
       const result = await analyzeUrl(url, controller.signal);
       if (controller.signal.aborted) return;
@@ -272,6 +258,10 @@ export function useDownloadFlow() {
         screen: "analyzing",
         navTab: "home",
         error: null,
+        videoInfo: null,
+        videoFormats: [],
+        audioFormats: [],
+        selectedFormat: null,
       }));
       performAnalyze(url);
     },
@@ -321,53 +311,6 @@ export function useDownloadFlow() {
       stage: "downloading",
       downloadingInfoData: info,
     }));
-
-    // In browser-only mode, use mock progress simulation
-    if (!isTauriRuntime()) {
-      const MOCK_STEPS = [
-        { progress: 5, downloaded: "4 MB", speed: "2.1 MB/s", eta: "01:18" },
-        { progress: 15, downloaded: "13 MB", speed: "3.2 MB/s", eta: "00:56" },
-        { progress: 28, downloaded: "24 MB", speed: "3.8 MB/s", eta: "00:42" },
-        { progress: 42, downloaded: "36 MB", speed: "4.1 MB/s", eta: "00:31" },
-        { progress: 58, downloaded: "49 MB", speed: "3.9 MB/s", eta: "00:21" },
-        { progress: 73, downloaded: "62 MB", speed: "3.5 MB/s", eta: "00:12" },
-        { progress: 88, downloaded: "75 MB", speed: "3.2 MB/s", eta: "00:05" },
-        { progress: 96, downloaded: "82 MB", speed: "2.8 MB/s", eta: "00:02" },
-        { progress: 100, downloaded: "85 MB", speed: "—", eta: "00:00" },
-      ];
-      let idx = 0;
-      const timer = setInterval(() => {
-        if (idx >= MOCK_STEPS.length) {
-          clearInterval(timer);
-
-          const completed = selectedFormat
-            ? buildCompletedDownload(videoInfo!, selectedFormat)
-            : null;
-
-          if (completed) {
-            void saveToHistory(completed);
-          }
-
-          setState((s) => ({
-            ...s,
-            screen: "complete",
-            progress: 100,
-            completedDownloadInfo: completed ?? undefined,
-          }));
-          return;
-        }
-        const step = MOCK_STEPS[idx];
-        setState((s) => ({
-          ...s,
-          progress: step.progress,
-          downloaded: step.downloaded,
-          speed: step.speed,
-          eta: step.eta,
-        }));
-        idx++;
-      }, 2000);
-      return;
-    }
 
     // Wire up real Tauri event listeners before starting
     setupDownloadEventListeners();
