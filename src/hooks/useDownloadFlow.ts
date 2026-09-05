@@ -19,14 +19,9 @@ import {
   getDownloadStatus,
   downloadBackendFile,
   openLocalFile,
+  scanMediaFile,
 } from "../services/tauri";
-import {
-  MOCK_VIDEO_INFO,
-  MOCK_VIDEO_FORMATS,
-  MOCK_AUDIO_FORMATS,
-  buildDownloadingInfo,
-  buildCompletedDownload,
-} from "../data/mockData";
+import { buildDownloadingInfo } from "../data/mockData";
 
 import {
   initializeHistory,
@@ -90,6 +85,7 @@ export function useDownloadFlow() {
   const analyzeAbortRef = useRef<AbortController | null>(null);
   const eventUnlistenersRef = useRef<(() => void)[]>([]);
   const historyInitializedRef = useRef(false);
+  const urlRef = useRef("");
 
   // Load persisted download history once.
   useEffect(() => {
@@ -250,6 +246,9 @@ export function useDownloadFlow() {
 
   // ── Core Flow ─────────────────────────────────────────────────────
 
+  // Keep urlRef in sync so handleStartDownload always has the current URL.
+  urlRef.current = state.url;
+
   const handleAnalyze = useCallback(
     (url: string) => {
       setState((s) => ({
@@ -283,7 +282,9 @@ export function useDownloadFlow() {
   }, []);
 
   const handleStartDownload = useCallback(async () => {
-    const { url, selectedFormat, videoInfo } = state;
+    const { selectedFormat, videoInfo } = state;
+    const url = urlRef.current;
+    console.warn("[DOWNLOAD] handleStartDownload url:", url, "quality:", selectedFormat?.quality);
     if (!selectedFormat) return;
 
     // Build downloading info from current data
@@ -334,6 +335,8 @@ export function useDownloadFlow() {
           if (status.status === "completed" && status.result) {
             console.log("[AndroidDownload] status branch: completed", status);
             const localPath = await downloadBackendFile(jobId, status.result.filename);
+            // Scan the file so it appears in Gallery/Media immediately.
+            void scanMediaFile(localPath);
             const completed: CompletedDownload = {
               title: status.result.title,
               type: kind === "mp3" ? "audio" : "video",
@@ -516,10 +519,6 @@ export function useDownloadFlow() {
     setState((s) => ({ ...s, screen: "setup" }));
   }, []);
 
-  const handleAnalysisComplete = useCallback(() => {
-    setState((s) => ({ ...s, screen: "setup" }));
-  }, []);
-
   const handleNavChange = useCallback((tab: NavTab) => {
     setState((s) => {
       if (tab === "settings") {
@@ -540,18 +539,15 @@ export function useDownloadFlow() {
     setState((s) => ({ ...s, navTab: "home", screen: "home" }));
   }, []);
 
-  // Compute derived state
-  const videoInfo = state.videoInfo ?? MOCK_VIDEO_INFO;
-  const videoFormats =
-    state.videoFormats.length > 0 ? state.videoFormats : MOCK_VIDEO_FORMATS;
-  const audioFormats =
-    state.audioFormats.length > 0 ? state.audioFormats : MOCK_AUDIO_FORMATS;
+  // Compute derived state — never use mock data
+  const videoInfo = state.videoInfo;
+  const videoFormats = state.videoFormats;
+  const audioFormats = state.audioFormats;
 
   const downloadingInfo =
-    state.selectedFormat && state.screen === "downloading"
+    state.selectedFormat && state.screen === "downloading" && state.downloadingInfoData
       ? {
-          ...(state.downloadingInfoData ??
-            buildDownloadingInfo(videoInfo, state.selectedFormat)),
+          ...state.downloadingInfoData,
           progress: state.progress,
           downloaded: state.downloaded,
           speed: state.speed,
@@ -560,11 +556,8 @@ export function useDownloadFlow() {
       : null;
 
   const completedDownload =
-    state.screen === "complete"
-      ? state.completedDownloadInfo ??
-        (state.selectedFormat
-          ? buildCompletedDownload(videoInfo, state.selectedFormat)
-          : null)
+    state.screen === "complete" && state.completedDownloadInfo
+      ? state.completedDownloadInfo
       : null;
 
   return {
@@ -583,7 +576,6 @@ export function useDownloadFlow() {
     stage: state.stage,
 
     // Actions
-    handleAnalysisComplete,
     handleAnalyze,
     handleSelectFormat,
     handleStartDownload,

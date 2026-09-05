@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "lucide-react";
 import AppHeader from "../components/AppHeader";
 import AnalyzingSpinner from "../components/AnalyzingSpinner";
@@ -7,18 +6,9 @@ import SkeletonCard from "../components/SkeletonCard";
 interface AnalyzingProps {
   url: string;
   onBack: () => void;
-  onComplete: () => void;
 }
 
-const Analyzing = ({ url, onBack: _onBack, onComplete }: AnalyzingProps) => {
-  // Simulate analysis completion after 3 seconds
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onComplete();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [onComplete]);
-
+const Analyzing = ({ url, onBack: _onBack }: AnalyzingProps) => {
   return (
     <div className="w-full min-h-screen flex flex-col pb-24">
       {/* App header / branding */}

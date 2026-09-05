@@ -16,7 +16,7 @@ const Settings = ({ onBack }: SettingsProps) => {
   return (
     <div className="w-full min-h-screen flex flex-col pb-24">
       {/* Header */}
-      <header className="w-full relative flex items-center px-4 pt-5 pb-3">
+      <header className="w-full relative flex items-center px-4 pt-10 pb-3">
         <button
           onClick={onBack}
           className="p-1 shrink-0 relative z-10"

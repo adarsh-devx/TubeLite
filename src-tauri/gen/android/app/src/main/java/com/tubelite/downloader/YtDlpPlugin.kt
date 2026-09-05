@@ -35,6 +35,11 @@ internal class OpenFileArgs {
     lateinit var path: String
 }
 
+@InvokeArg
+internal class ScanMediaArgs {
+    lateinit var path: String
+}
+
 @TauriPlugin
 class YtDlpPlugin(private val activity: Activity) : Plugin(activity) {
 
@@ -231,6 +236,44 @@ class YtDlpPlugin(private val activity: Activity) : Plugin(activity) {
             Log.e(TAG, "[OPEN_FILE] Error: ${e.message}", e)
             invoke.reject("Failed to open file: ${e.message}")
         }
+    }
+
+    @Command
+    fun scanMedia(invoke: Invoke) {
+        val args = invoke.parseArgs(ScanMediaArgs::class.java)
+        val filePath = args.path
+        val file = File(filePath)
+
+        if (!file.exists()) {
+            Log.e(TAG, "[MEDIA_SCAN] File not found: $filePath")
+            invoke.reject("File not found: $filePath")
+            return
+        }
+
+        val extension = MimeTypeMap.getFileExtensionFromUrl(filePath)
+            .lowercase()
+
+        val mimeType = MimeTypeMap
+            .getSingleton()
+            .getMimeTypeFromExtension(extension)
+            ?: when (extension) {
+                "mp4" -> "video/mp4"
+                "m4a" -> "audio/mp4"
+                "mp3" -> "audio/mpeg"
+                else -> "*/*"
+            }
+
+        Log.d(TAG, "[MEDIA_SCAN] Scanning: $filePath ($mimeType)")
+
+        MediaScannerConnection.scanFile(
+            activity.applicationContext,
+            arrayOf(file.absolutePath),
+            arrayOf(mimeType)
+        ) { path, uri ->
+            Log.d(TAG, "[MEDIA_SCAN] Done path=$path uri=$uri")
+        }
+
+        invoke.resolve(JSObject())
     }
 
     private fun parseYtdlpJson(json: String): JSObject? {

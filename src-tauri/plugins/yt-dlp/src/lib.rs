@@ -76,6 +76,16 @@ impl<R: Runtime> YtDlp<R> {
             .map_err(|e| format!("Plugin openFile call failed: {e}"))
     }
 
+    #[cfg(target_os = "android")]
+    pub fn scan_media(&self, path: &str) -> Result<(), String> {
+        let request = OpenFileRequest {
+            path: path.to_string(),
+        };
+        self.mobile_plugin_handle
+            .run_mobile_plugin::<()>("scanMedia", request)
+            .map_err(|e| format!("Plugin scanMedia call failed: {e}"))
+    }
+
     /// On desktop, this is a stub — desktop uses Rust analyze_url command directly.
     #[cfg(not(target_os = "android"))]
     pub fn extract_info(&self, _url: &str) -> Result<AnalyzedVideo, AnalyzeError> {
@@ -88,6 +98,11 @@ impl<R: Runtime> YtDlp<R> {
     #[cfg(not(target_os = "android"))]
     pub fn open_file(&self, _path: &str) -> Result<(), String> {
         Err("Use desktop open_path command on desktop.".to_string())
+    }
+
+    #[cfg(not(target_os = "android"))]
+    pub fn scan_media(&self, _path: &str) -> Result<(), String> {
+        Ok(())
     }
 }
 

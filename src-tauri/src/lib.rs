@@ -4,6 +4,21 @@ pub mod runtime;
 use commands::{
     analyze_url, cancel_download, download_backend_file, open_local_file, ping, start_download,
 };
+
+#[tauri::command]
+fn scan_media(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        let state = app.state::<tauri_plugin_ytdlp::YtDlp<tauri::Wry>>();
+        return state.scan_media(&path);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        let _ = path;
+        Ok(())
+    }
+}
 use serde::Serialize;
 use tauri::Manager;
 
@@ -82,6 +97,7 @@ pub fn run() {
             android_extract_info,
             download_backend_file,
             open_local_file,
+            scan_media,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

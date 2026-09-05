@@ -153,6 +153,14 @@ export async function openLocalFile(path: string): Promise<void> {
   }
 }
 
+export async function scanMediaFile(path: string): Promise<void> {
+  try {
+    await invokeNative<void>("scan_media", { path });
+  } catch {
+    // Best-effort — gallery visibility is not critical
+  }
+}
+
 /**
  * Cancel the active download.
  */

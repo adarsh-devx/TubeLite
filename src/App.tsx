@@ -44,7 +44,6 @@ function App() {
     history,
     error,
     stage,
-    handleAnalysisComplete,
     handleAnalyze,
     handleSelectFormat,
     handleStartDownload,
@@ -76,11 +75,10 @@ function App() {
         <Analyzing
           url={url}
           onBack={handleBackToHome}
-          onComplete={handleAnalysisComplete}
         />
       )}
 
-      {screen === "setup" && (
+      {screen === "setup" && videoInfo && (
         <DownloadSetup
           videoInfo={videoInfo}
           videoFormats={videoFormats}
