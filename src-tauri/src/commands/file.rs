@@ -1,6 +1,5 @@
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -121,28 +120,6 @@ pub fn download_backend_file(
         return Err("Invalid download job ID.".to_string());
     }
 
-    let address = backend_url
-        .strip_prefix("http://")
-        .ok_or_else(|| {
-            "Only HTTP backend URLs are supported for native streaming.".to_string()
-        })?;
-
-    let (host_port, _) = address.split_once('/').unwrap_or((address, ""));
-
-    let mut stream = TcpStream::connect(host_port)
-        .map_err(|error| format!("Could not connect to download service: {error}"))?;
-
-    let request = format!(
-        "GET /api/download/{job_id}/file HTTP/1.1\r\n\
-         Host: {host_port}\r\n\
-         Connection: close\r\n\
-         \r\n"
-    );
-
-    stream
-        .write_all(request.as_bytes())
-        .map_err(|error| error.to_string())?;
-
     // IMPORTANT:
     // Resolve the destination BEFORE creating the file.
     let directory = downloads_dir(&app)?;
@@ -158,47 +135,27 @@ pub fn download_backend_file(
         target.display()
     );
 
-    let mut reader = BufReader::new(stream);
+    let file_url = format!("{backend_url}/api/download/{job_id}/file");
 
-    let mut status_line = String::new();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+        .map_err(|error| format!("Could not build download client: {error}"))?;
 
-    reader
-        .read_line(&mut status_line)
-        .map_err(|error| error.to_string())?;
+    let response = client
+        .get(&file_url)
+        .send()
+        .map_err(|error| format!("Could not connect to download service: {error}"))?;
 
-    if !status_line.starts_with("HTTP/1.1 200")
-        && !status_line.starts_with("HTTP/1.0 200")
-    {
+    if !response.status().is_success() {
         return Err(format!(
-            "Download file request failed: {}",
-            status_line.trim()
+            "Download file request failed: HTTP {}",
+            response.status()
         ));
     }
 
-    let mut content_length: Option<u64> = None;
-
-    loop {
-        let mut line = String::new();
-
-        reader
-            .read_line(&mut line)
-            .map_err(|error| error.to_string())?;
-
-        if line == "\r\n" || line.is_empty() {
-            break;
-        }
-
-        if let Some(value) = line.strip_prefix("Content-Length:") {
-            content_length = Some(
-                value
-                    .trim()
-                    .parse::<u64>()
-                    .map_err(|_| "Invalid file response length.".to_string())?,
-            );
-        }
-    }
-
-    let length = content_length
+    let length = response
+        .content_length()
         .ok_or_else(|| "File response has no content length.".to_string())?;
 
     let mut file = File::create(&target).map_err(|error| {
@@ -208,7 +165,7 @@ pub fn download_backend_file(
         )
     })?;
 
-    let copied = std::io::copy(&mut reader.take(length), &mut file)
+    let copied = std::io::copy(&mut response.take(length), &mut file)
         .map_err(|error| format!("Could not save downloaded file: {error}"))?;
 
     if copied != length {
